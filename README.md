@@ -3,8 +3,9 @@
 > Vòng quay thưởng **độc lập** do Provider vận hành. Đối tác (My Green / Green SM / be) chỉ gắn 1 nút
 > trigger để cộng lượt quay theo `userId`; vòng quay + quà nằm hoàn toàn phía Provider.
 > Live: https://moneyhunter.nexlogvn.tech · Repo: `anhluufromVietnam/moneyhunter`
+> Auth: **Cookie HttpOnly + Secure** — token chỉ qua URL 1 lần lúc vào cửa, xong server set cookie rồi redirect về URL sạch `/wheel`.
 
-[![Node 20+](https://img.shields.io/badge/node-20%2B-green)](https://nodejs.org) [![Zero deps](https://img.shields.io/badge/deps-0%20npm%20packages-blue)](package.json) [![Tests](https://img.shields.io/badge/tests-12%2F12%20passed-brightgreen)](test/run.js)
+[![Node 20+](https://img.shields.io/badge/node-20%2B-green)](https://nodejs.org) [![Zero deps](https://img.shields.io/badge/deps-0%20npm%20packages-blue)](package.json) [![Tests](https://img.shields.io/badge/tests-18%2F18%20passed-brightgreen)](test/run.js)
 
 ---
 
@@ -22,7 +23,7 @@ Flow cũ (dùng chung UI với My Green) chồng chéo trách nhiệm:
 |---|---|
 | **Đối tác** (My Green, Green SM, be…) | Chỉ gọi `POST /v1/trigger {userId}` khi user bấm nút (đặt xe, giữ tiết kiệm, thanh toán). |
 | **Provider** (repo này) | Sở hữu vòng quay, lượt quay, quà, xác thực token, quản lý theo `userId`. |
-| **User** | Vào vòng quay qua deep link `?userId=&token=` từ app đối tác. |
+| **User** | Vào vòng quay qua deep link `?userId=&token=` 1 lần → cookie `mh_session` HttpOnly → ở lại `/wheel` sạch URL. |
 
 ---
 
@@ -34,12 +35,17 @@ Flow cũ (dùng chung UI với My Green) chồng chéo trách nhiệm:
 │ (My Green…)  │   X-Client-Id/Api-Key  │  Node 20 · zero-dep   │
 └──────────────┘                         │  https://moneyhunter. │
         │                              │  nexlogvn.tech        │
-        │ ② deep link ?userId=&token=   │                       │
-        └──────────────────────────────│─►  /entry (gate 401)   │
+        │ ② /entry?userId=&token= (1 lần)│                       │
+        └──────────────────────────────│─► verify → Set-Cookie │
+                                        │  mh_session HttpOnly  │
+                                        │  Secure + SameSite=Lax│
+                                        │  302 → /wheel (URL sạch)│
                                         │                       │
                                         │  ③ POST /v1/spin      │
-                                        │     -1 lượt + ghi quà │
-                                        │     vào userId         │
+                                        │  (cookie tự gửi, JS   │
+                                        │   không thấy token, chỉ│
+                                        │   gửi userId)          │
+                                        │  -1 lượt + ghi quà     │
                                         └───────────────────────┘
                                                 │
                                         ④ GET/PATCH /v1/users/*
@@ -48,8 +54,8 @@ Flow cũ (dùng chung UI với My Green) chồng chéo trách nhiệm:
 
 * **Trigger (+lượt):** idempotent-ish, tạo `userId` nếu chưa tồn tại, lưu event vào `history`.
 * **Spin (−lượt + quà):** nguyên tử trong bộ nhớ — trừ 1 lượt **và** ghi quà cùng một bước. Hết lượt → `409`.
-* **Entry gate:** thiếu `userId` hoặc `token` → `401` (chống vào thẳng bằng link).
-* **Quản lý:** admin JWT theo `userId`: xem summary, gifts, history, điều chỉnh lượt.
+* **Entry gate + cookie:** `/entry?userId=&token=` thiếu 1 → `401` (browser → trang 401, API → JSON). Đủ → Set-cookie HttpOnly+Secure+SameSite=Lax rồi 302 về `/wheel`. Token không ở lại URL, JS không đọc được token, chỉ gọi `GET /v1/session` để hiển thị số lượt.
+* **Quản lý:** admin JWT theo `userId`: xem summary, gifts, history, điều chỉnh lượt. `POST /logout` xóa cookie.
 
 ### Trạng thái dữ liệu (demo in-memory → production DB)
 
@@ -73,7 +79,9 @@ users: Map<userId, {
 ### Xác thực
 
 * **Partner trigger:** header `X-Client-Id: <clientId>` + `X-Api-Key: <key>` (xác thực máy ↔ máy).
-* **Spin / Entry / Admin:** JWT HS256 (`Authorization: Bearer <token>` hoặc `token` trong body/query).
+* **Browser:** HttpOnly cookie `mh_session` (token JWT) + `mh_uid`. Set 1 lần ở `GET /entry?userId=&token=` (browser) rồi 302 về `/wheel` sạch. JS không thấy token, chỉ gọi `GET /v1/session` để hiển thị lượt.
+* **Spin (curl fallback):** `Authorization: Bearer <token>` hoặc body `{token}`.
+* **Admin:** `Authorization: Bearer <admin JWT>` cho management.
   Tạo token admin demo: `node -e "console.log(require('./lib/auth').sign({scope:'admin'}))"`.
 * JWT payload: `{ sub, scope, userId?, iat, exp }` — role `admin` cho management.
 
@@ -82,16 +90,19 @@ users: Map<userId, {
 | # | Method | Path | Auth | Body / Query | Response (2xx) |
 |---|---|---|---|---|---|
 | 1 | GET | `/healthz` | — | — | `{ok:true, service, time}` |
-| 2 | GET | `/entry` | query | `?userId=&token=` | `{valid, userId, availableTurns, gifts}` |
-| 3 | POST | `/v1/auth/verify` | body/token | `{token, userId?}` | `{valid:true, userId}` |
-| 4 | POST | `/v1/trigger` | partner | `{userId, amount=1, source?}` | `{userId, added, availableTurns, totalEarned}` |
-| 5 | POST | `/v1/spin` | Bearer/body | `{userId, token?}` | `{spinId, userId, remaining, gift}` |
-| 6 | GET | `/v1/users` | admin | — | `{users:[summary…]}` |
-| 7 | GET | `/v1/users/:userId` | admin | — | `{summary, gifts, history}` |
-| 8 | PATCH | `/v1/users/:userId/turns` | admin | `{delta:+1|-1}` | `{userId, availableTurns}` |
+| 2 | GET | `/entry` | query 1 lần | `?userId=&token=` | Browser → `302 /wheel` + Set-Cookie; API → `{valid, userId, availableTurns, gifts}` |
+| 3 | GET | `/wheel` | cookie | — | HTML vòng quay (401 page nếu thiếu cookie) |
+| 4 | GET | `/v1/session` | cookie | — | `{userId, availableTurns, gifts}` |
+| 5 | POST | `/logout` | cookie | — | `{ok:true}` + xóa cookie |
+| 6 | POST | `/v1/auth/verify` | body/token/cookie | `{token, userId?}` | `{valid:true, userId}` |
+| 7 | POST | `/v1/trigger` | partner | `{userId, amount=1, source?}` | `{userId, added, availableTurns, totalEarned}` |
+| 8 | POST | `/v1/spin` | cookie/Bearer/body | `{userId, token? (fallback)}` | `{spinId, userId, remaining, gift}` |
+| 9 | GET | `/v1/users` | admin | — | `{users:[summary…]}` |
+| 10 | GET | `/v1/users/:userId` | admin | — | `{summary, gifts, history}` |
+| 11 | PATCH | `/v1/users/:userId/turns` | admin | `{delta:+1|-1}` | `{userId, availableTurns}` |
 
-Lỗi hay gặp: `401 missing userId or token` (entry), `401 missing X-Client-Id / X-Api-Key` (trigger),
-`401 admin token required`, `404 user not found`, `409 no turns left`.
+Lỗi hay gặp: `401 missing userId or token` (entry), `401 missing session cookie` (session/wheel),
+`401 missing X-Client-Id / X-Api-Key` (trigger), `401 admin token required`, `404 user not found`, `409 no turns left`.
 
 ### Ví dụ curl (live)
 
@@ -103,16 +114,20 @@ curl -s $BASE/v1/trigger \
   -H "Content-Type: application/json" -d '{"userId":"USR_001","amount":1,"source":"btn"}'
 # → {"userId":"USR_001","added":1,"availableTurns":3,"totalEarned":3}
 
-# 2) Vào app (yêu cầu userId + token, thiếu → 401)
+# 2) Vào app bằng browser — token chỉ qua URL 1 lần, xong set cookie + 302 về /wheel sạch
 TOKEN=$(curl -s $BASE/token-demo | node -e "const d=process.stdin;let t='';d.on('data',c=>t+=c);d.on('end',()=>console.log(JSON.parse(t).token))")
-curl -s "$BASE/entry?userId=USR_001&token=$TOKEN"
+curl -s -H 'Accept: text/html' "$BASE/entry?userId=USR_001&token=$TOKEN" -L -c jar.txt
+# jar giờ có mh_session HttpOnly Secure — token không còn trên URL
 
-# 3) Quay: -1 lượt + ghi quà
-curl -s $BASE/v1/spin -H "Content-Type: application/json" \
-  -d "{\"userId\":\"USR_001\",\"token\":\"$TOKEN\"}"
+# 3) Quay bằng cookie (JS thật) — không cần token trong body
+curl -s -b jar.txt $BASE/v1/spin -H "Content-Type: application/json" \
+  -d '{"userId":"USR_001"}'
 # → {"spinId":"spin_...","remaining":2,"gift":{...,"prizeId":"concert_ticket","code":"MG-SNN-XXXX"}}
 
-# 4) Quản trị theo userId
+# 4) Xem session/lượt (wheel.html gọi endpoint này)
+curl -s -b jar.txt $BASE/v1/session
+
+# 5) Quản trị theo userId
 curl -s $BASE/v1/users/USR_001 -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -124,8 +139,10 @@ curl -s $BASE/v1/users/USR_001 -H "Authorization: Bearer $TOKEN"
 
 ```bash
 npm start          # node server.js → http://localhost:8787
-npm test           # 12 tests toàn trình, không cần dependency
+npm test           # 18 tests toàn trình, không cần dependency
 open http://localhost:8787/demo
+# vào app bằng deep link 1 lần (token qua URL), xong tự về /wheel sạch
+open "http://localhost:8787/entry?userId=USR_001&token=<JWT>"
 ```
 
 > Zero dependency — chỉ cần Node ≥ 18. Không cần `npm install`.
@@ -146,13 +163,15 @@ pm2 restart moneyhunter && pm2 save
 
 ---
 
-## 5. Trang demo
+## 5. Trang demo & màn quay
 
-Mở https://moneyhunter.nexlogvn.tech/demo :
-
-* **Cột trái** — 3 bước vận hành thật: Trigger (+lượt) → Vào app (`/entry?userId=&token=`) → Quay (`/v1/spin`).
-* **Giữa** — điện thoại tiền thân của app đối tác (gate → vòng quay → kết quả → quà của tôi).
-* **Cột phải** — quản lý theo `userId` (admin) + nút test toàn trình + log.
+* **Màn quay thực tế** (token sạch URL): https://moneyhunter.nexlogvn.tech/wheel
+  — vào bằng `GET /entry?userId=&token=` 1 lần → server set cookie HttpOnly → 302 về `/wheel`.
+  JS không thấy token, chỉ gọi `GET /v1/session` để đọc lượt.
+* **Trang demo vận hành** (chỉ dev): https://moneyhunter.nexlogvn.tech/demo
+  * **Cột trái** — 3 bước vận hành thật: Trigger (+lượt) → Vào app (`/entry?userId=&token=`) → Quay (`/v1/spin`).
+  * **Giữa** — điện thoại tiền thân của app đối tác (gate → vòng quay → kết quả → quà của tôi).
+  * **Cột phải** — quản lý theo `userId` (admin) + nút test toàn trình + log.
 
 ---
 
@@ -175,12 +194,13 @@ moneyhunter/
 ├── server.js            # entry, in JWT demo khi boot
 ├── lib/
 │   ├── auth.js          # JWT HS256 sign/verify
+│   ├── session.js       # HttpOnly cookie mh_session/mh_uid (set/parse/clear)
 │   ├── books.js         # store users/turns/gifts (in-memory)
-│   └── router.js        # tất cả route /v1/* + /entry + static demo
+│   └── router.js        # tất cả route /v1/* + /entry + /wheel + static demo
 ├── public/
-│   ├── wheel.html       # màn quay thực tế — GET /entry?userId=&token= (browser) trả file này
+│   ├── wheel.html       # màn quay thực tế — chỉ đọc cookie, URL sạch (/wheel)
 │   └── index.html       # trang demo vận hành (3 cột) — chỉ cho dev
-├── test/run.js          # 12 tests end-to-end (fetch, không cần test framework)
+├── test/run.js          # 18 tests end-to-end (fetch, không cần test framework)
 ├── docs/
 │   ├── API.md           # chi tiết request/response
 │   ├── DEPLOY.md        # hướng dẫn deploy Lightsail + tunnel

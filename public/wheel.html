@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Money Hunter — Vòng quay</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@600;700;800;900&display=swap"><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
@@ -65,36 +65,39 @@ body{font-family:'Nunito',-apple-system,'Segoe UI',sans-serif;background:linear-
 (function(){
 'use strict';
 const q=new URLSearchParams(location.search);
-const U=q.get('userId')||'', T=q.get('token')||'';
 const $=id=>document.getElementById(id);
-let turns=0, busy=false;
+let USER='', turns=0, busy=false;
 function banner(cls,msg){$('banner').innerHTML=`<div class="${cls}">${msg}</div>`}
 function bannerErr(msg){banner('err',msg)}
 function bannerOk(msg){banner('ok',msg)}
-function toast(msg){bannerOk(msg)}
 function setTurns(n){turns=n;$('turns').textContent=n;$('spinBtn').disabled=!n||busy;$('spinBtn').textContent=!n?'Hết lượt — về app đối tác nhận thêm':(busy?'Đang quay…':'Quay ngay')}
 async function api(path,opt){const r=await fetch(path,opt);let j=null;try{j=await r.json()}catch(e){j={error:r.statusText}}return{status:r.status,j}}
 async function boot(){
- $('who').textContent=U||'(thiếu userId)';
- if(!U||!T){bannerErr('_LINK THIẾU userId HOẶC token — không vào được. Vui lòng quay lại app đối tác và chạm icon quay thưởng.');$('spinBtn').disabled=true;return}
- const r=await api(`/v1/users/${encodeURIComponent(U)}?probe=1`);
- await refresh();
- if(turns<=0) bannerErr('Bạn đang có 0 lượt quay. Quay lại app đối tác, hoàn thành nhiệm vụ (đặt xe / gửi tiết kiệm / thanh toán) để nhận thêm lượt.');
+ // Không đọc token từ URL nữa — token nằm trong HttpOnly cookie, JS không thấy.
+ // Chỉ lấy userId hiển thị từ cookie qua /v1/session (server đọc cookie, không lộ token về JS)
+ if(!document.cookie.includes('mh_session') && !document.cookie.includes('mh_uid')){
+   // Có thể cookie HttpOnly nên document.cookie rỗng — gọi session API để biết
+ }
+ const r=await api('/v1/session');
+ if(r.status===401){bannerErr('Chưa đăng nhập — link thiếu hoặc token đã hết hạn. Vui lòng quay lại app đối tác và chạm icon quay thưởng.');$('spinBtn').disabled=true;return}
+ USER=r.j.userId;$('who').textContent=USER;setTurns(r.j.availableTurns);$('giftCount').textContent=(r.j.gifts||[]).length;
+ bannerOk('Đã kết nối · '+USER+' · còn '+r.j.availableTurns+' lượt');
+ if(r.j.availableTurns<=0) bannerErr('Bạn đang có 0 lượt quay. Quay lại app đối tác, hoàn thành nhiệm vụ (đặt xe / gửi tiết kiệm / thanh toán) để nhận thêm lượt.');
 }
 async function refresh(){
- if(!U||!T){setTurns(0);return}
- const r=await api(`/entry?userId=${encodeURIComponent(U)}&token=${encodeURIComponent(T)}`);
- if(!r.j.valid){bannerErr('Token không hợp lệ ('+(r.j.error||'401')+'). Vui lòng lấy link mới từ app đối tác.');setTurns(0);return}
- setTurns(r.j.availableTurns);
- $('giftCount').textContent=(r.j.gifts||[]).length;
- bannerOk('Đã kết nối · '+U+' · còn '+r.j.availableTurns+' lượt');
+ const r=await api('/v1/session');
+ if(r.status!==200){setTurns(0);bannerErr('Phiên đăng nhập đã hết hạn.');return}
+ USER=r.j.userId;$('who').textContent=USER;setTurns(r.j.availableTurns);$('giftCount').textContent=(r.j.gifts||[]).length;
+ bannerOk('Đã kết nối · '+USER+' · còn '+r.j.availableTurns+' lượt');
 }
 async function doSpin(){
  if(busy||turns<=0)return;
  busy=true;$('spinBtn').disabled=true;
  $('wheel').classList.add('spinning');
  $('hint').textContent='Đang quay…';
- const r=await api('/v1/spin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:U,token:T})});
+ // Chỉ gửi userId từ session, token nằm trong HttpOnly cookie (server tự đọc)
+ const uid=USER;
+ const r=await api('/v1/spin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:uid})});
  if(r.status!==200){
   busy=false;$('wheel').classList.remove('spinning');setTurns(turns);
   bannerErr(r.j.error==='no turns left'?'Hết lượt quay. Quay lại app đối tác để nhận thêm.':'Không quay được: '+(r.j.error||r.status));
@@ -104,7 +107,7 @@ async function doSpin(){
  const w=$('wheel');w.style.transform=`rotate(${1440+Math.floor(Math.random()*360)}deg)`;
  setTimeout(()=>{busy=false;$('wheel').classList.remove('spinning');setTurns(r.j.remaining||turns);refresh();
    $('modalPrize').textContent=r.j.gift.label;$('modalCode').textContent=r.j.gift.code;
-   $('modalMeta').textContent='spinId '+r.j.spinId+' · HSĐ '+r.j.gift.expiresAt.slice(0,10)+' · quà đã ghi vào '+U;
+   $('modalMeta').textContent='spinId '+r.j.spinId+' · HSĐ '+r.j.gift.expiresAt.slice(0,10)+' · quà đã ghi vào '+USER;
    $('overlay').classList.add('show');},4000);
 }
 function closeModal(){$('overlay').classList.remove('show');$('hint').textContent='Quà đã lưu. Còn '+turns+' lượt — quay thêm nếu muốn.'}
