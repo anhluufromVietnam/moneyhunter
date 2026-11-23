@@ -9,7 +9,30 @@
 
 ---
 
-## 1. Bối cảnh & vấn đề
+## 🔗 Link mẫu vào vòng quay — COPY & DÁN
+
+> **Đây là link duy nhất đối tác cần gắn vào app.** User bấm icon → trình duyệt mở link này →
+> server verify 1 lần → set cookie HttpOnly → **302 về `/wheel` sạch URL** → ở lại màn quay.
+> Token chỉ nằm trên URL lần đầu; sau đó trình duyệt tự gửi cookie, JS không thấy token.
+
+**Link live (copy nguyên xi):**
+
+```text
+https://moneyhunter.nexlogvn.tech/entry?userId=USR_001&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZSI6ImFkbWluIiwic3ViIjoiYWRtaW4iLCJpYXQiOjE3OTU0MzQ4ODMsImV4cCI6MTc5NTUyMTI4M30.cDamjW-ZBVm9HKOnsI2KQbus1NV7953IFf0SRLUBl9Y
+```
+
+**Tự tạo link cho userId khác** (chỉ thay `USR_001`):
+
+```bash
+TOKEN=$(curl -s https://moneyhunter.nexlogvn.tech/token-demo | node -e "const d=process.stdin;let t='';d.on('data',c=>t+=c);d.on('end',()=>console.log(JSON.parse(t).token))")
+echo "https://moneyhunter.nexlogvn.tech/entry?userId=THAY_USERID_CUA_BAN&token=$TOKEN"
+```
+
+> Ngoài ra còn 3 link phụ: xem bảng link đầy đủ ở [§ Hướng dẫn tích hợp](#hướng-dẫn-tích-hợp-cho-đối-tác) bên dưới.
+
+---
+
+## 1. Bối cảnh & vấn đề <!-- xếp lên trên có thể, nhưng giữ nguyên để không mất link anchor -->
 
 Flow cũ (dùng chung UI với My Green) chồng chéo trách nhiệm:
 
@@ -172,6 +195,51 @@ pm2 restart moneyhunter && pm2 save
   * **Cột trái** — 3 bước vận hành thật: Trigger (+lượt) → Vào app (`/entry?userId=&token=`) → Quay (`/v1/spin`).
   * **Giữa** — điện thoại tiền thân của app đối tác (gate → vòng quay → kết quả → quà của tôi).
   * **Cột phải** — quản lý theo `userId` (admin) + nút test toàn trình + log.
+
+---
+
+## 🚀 Hướng dẫn tích hợp cho đối tác
+
+### A. Gắn link vào app (1 bước duy nhất)
+
+```text
+https://moneyhunter.nexlogvn.tech/entry?userId=USR_001&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZSI6ImFkbWluIiwic3ViIjoiYWRtaW4iLCJpYXQiOjE3OTU0MzQ4ODMsImV4cCI6MTc5NTUyMTI4M30.cDamjW-ZBVm9HKOnsI2KQbus1NV7953IFf0SRLUBl9Y
+```
+
+Thay `USR_001` bằng `userId` thật của người dùng. Mở link trên trình duyệt là vào đúng màn
+quay, không qua menu/giữa. Cookie `mh_session` HttpOnly + Secure được set tự động, URL sạch ngay.
+
+### B. Cộng lượt quay (khi user hoàn thành nhiệm vụ)
+
+```bash
+curl -s https://moneyhunter.nexlogvn.tech/v1/trigger \
+  -H "X-Client-Id: mygreen" -H "X-Api-Key: mygreen_api_key_test" \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"USR_001","amount":1,"source":"mygreen-button"}'
+# => {"userId":"USR_001","added":1,"availableTurns":3,"totalEarned":3}
+```
+
+Chưa có `userId` thì tự tạo. Gọi 1 lần cho mỗi nhiệm vụ (đặt xe, gửi tiết kiệm, thanh toán).
+
+### C. Quay (không cần gọi thủ công — vòng quay tự trừ)
+
+User quay trong `/wheel` → JS tự gọi `POST /v1/spin` kèm cookie → 1 lượt bị trừ, quà được ghi thẳng vào `userId` (không cần truyền token). Hết lượt → `409 no turns left`, hiện nút về app đối tác.
+
+### D. Bảng link đầy đủ
+
+| Link | Dùng cho | Ghi chú |
+|---|---|---|
+| `/entry?userId=&token=` | **Gắn vào app đối tác** (icon quay thưởng) | Cửa duy nhất token qua URL; xong set cookie + 302 `/wheel` sạch |
+| `/wheel` | Màn quay thực tế sau khi đã có cookie | Đừng gắn trực tiếp — chưa có cookie sẽ về `401` |
+| `/demo` | Dev test toàn trình (trigger/entry/spin/mgmt) | Không cho user thật dùng |
+| `/healthz` | Giám sát uptime | Trả `{"ok":true}` |
+
+### E. Lỗi thường gặp
+
+* `401 missing userId or token` → link thiếu 1 trong 2 tham số.
+* `401 missing session cookie` → vào thẳng `/wheel` khi chưa qua `/entry`.
+* `409 no turns left` → chưa trigger lượt nào cho `userId` này.
+* Cookie không lưu (WebView) → app đối tác phải bật lưu cookie / cho phép trình duyệt mở link ngoài.
 
 ---
 
