@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Money Hunter — Vòng quay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:'Nunito',-apple-system,'Segoe UI',sans-serif;background:linear-gradient(180deg,#7dd3fc 0%,#bbf7d0 45%,#86efac 100%);min-height:100vh;overflow-x:hidden}
+.wrap{max-width:430px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;position:relative}
+.top{display:flex;align-items:center;gap:10px;padding:14px 16px;background:rgba(255,255,255,.92);backdrop-filter:blur(8px)}
+.back{width:36px;height:36px;border-radius:50%;background:#f3f4f6;display:grid;place-items:center;font-size:18px;border:none;cursor:pointer;flex-shrink:0}
+.logo{font-weight:900;font-size:20px;color:#166534}
+.sub{font-size:12px;color:#6b7280;font-weight:700}
+.turn-card{background:#fff;border-radius:16px;margin:12px 16px 0 16px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.turn-card .big{font-size:24px;font-weight:900;color:#166534}
+.turn-card .who{font-size:12px;color:#6b7280;font-weight:700}
+.wheel-wrap{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 16px 16px}
+.prize-strip{display:flex;gap:6px;overflow-x:auto;max-width:100%;padding:4px 2px;margin-bottom:6px}
+.prize-strip span{white-space:nowrap;font-size:11px;font-weight:800;background:#fff;border-radius:999px;padding:5px 10px;border:1px solid #e5e7eb}
+.wheel{width:min(300px,80vw);height:min(300px,80vw);border-radius:50%;border:10px solid #facc15;box-shadow:0 16px 40px rgba(0,0,0,.2);background:conic-gradient(#16a34a 0 45deg,#fef08a 45deg 90deg,#16a34a 90deg 135deg,#fef08a 135deg 180deg,#16a34a 180deg 225deg,#fef08a 225deg 270deg,#16a34a 270deg 315deg,#fef08a 315deg 360deg);transition:transform 4s cubic-bezier(.12,.8,.08,1);position:relative}
+.wheel::after{content:'🎡';position:absolute;inset:0;display:grid;place-items:center;font-size:28px;pointer-events:none}
+.ptr{font-size:22px;margin:-6px 0 2px}
+.btn{width:100%;padding:16px;border:none;border-radius:14px;font-weight:900;font-size:16px;cursor:pointer;margin-top:8px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-g{background:linear-gradient(180deg,#22c55e,#15803d);color:#fff}
+.btn-d{background:#111827;color:#fff}
+.btn-w{background:#fff;color:#111827;border:2px solid #e5e7eb}
+.btn-sm{padding:10px;font-size:13px}
+.hint{font-size:12px;color:#374151;text-align:center;font-weight:700;margin-top:8px;padding:0 16px}
+.err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:12px;padding:12px 14px;margin:12px 16px;font-size:13px;font-weight:700}
+.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:12px;padding:12px 14px;margin:12px 16px;font-size:13px;font-weight:800}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;place-items:center;z-index:9;padding:16px}
+.overlay.show{display:grid}
+.modal{background:#fff;border-radius:20px;padding:24px 20px;max-width:360px;width:100%;text-align:center}
+.modal .t{font-size:22px;font-weight:900}
+.modal .code{background:#fef9c3;border-radius:10px;padding:12px;font-weight:900;font-size:22px;letter-spacing:1px;margin:12px 0;word-break:break-all}
+.modal small{color:#6b7280;font-weight:700}
+.gift-dot{width:8px;height:8px;background:#facc15;border-radius:50%;display:inline-block;margin-right:4px}
+.bottom{background:#fff;padding:12px 16px 20px;border-top:1px solid #eee;position:sticky;bottom:0}
+.spinning{animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}
+@media(max-height:700px){.wheel{width:min(240px,70vw);height:min(240px,70vw)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><button class="back" onclick="history.back()">‹</button><div><div class="logo">Money Hunter</div><div class="sub">Quay số · Nhận quà</div></div></div>
+<div class="turn-card"><div><div class="who" id="who">—</div><div class="big"><span id="turns">0</span> lượt</div></div><div style="text-align:right"><div class="who">🎁 Đã trúng</div><div class="big" id="giftCount">0</div></div></div>
+<div id="banner"></div>
+<div class="wheel-wrap">
+<div class="prize-strip"><span>🎫 Vé concert</span><span>💳 Voucher 50K</span><span>🛒 Voucher 100K</span><span>🛵 Voucher be 50K</span></div>
+<div class="ptr">▼</div>
+<div class="wheel" id="wheel"></div>
+<div class="hint" id="hint">Ấn “Quay ngay” — mỗi lượt quay trừ đúng 1, quà ghi thẳng vào tài khoản của bạn.</div>
+</div>
+<div class="bottom">
+<button class="btn btn-g" id="spinBtn" onclick="doSpin()">Quay ngay</button>
+<button class="btn btn-w" onclick="doRefresh()">↻ Cập nhật lượt</button>
+</div>
+</div>
+<div class="overlay" id="overlay"><div class="modal"><div style="font-size:36px">🎉</div><div class="t" id="modalTitle">Chúc mừng bạn!</div><div id="modalPrize" style="font-weight:800"></div><div class="code" id="modalCode">—</div><small id="modalMeta"></small><button class="btn btn-g" onclick="closeModal()">Đã biết</button><button class="btn btn-w" onclick="closeModal()">Quay tiếp</button></div></div>
+<script>
+(function(){
+'use strict';
+const q=new URLSearchParams(location.search);
+const U=q.get('userId')||'', T=q.get('token')||'';
+const $=id=>document.getElementById(id);
+let turns=0, busy=false;
+function banner(cls,msg){$('banner').innerHTML=`<div class="${cls}">${msg}</div>`}
+function bannerErr(msg){banner('err',msg)}
+function bannerOk(msg){banner('ok',msg)}
+function toast(msg){bannerOk(msg)}
+function setTurns(n){turns=n;$('turns').textContent=n;$('spinBtn').disabled=!n||busy;$('spinBtn').textContent=!n?'Hết lượt — về app đối tác nhận thêm':(busy?'Đang quay…':'Quay ngay')}
+async function api(path,opt){const r=await fetch(path,opt);let j=null;try{j=await r.json()}catch(e){j={error:r.statusText}}return{status:r.status,j}}
+async function boot(){
+ $('who').textContent=U||'(thiếu userId)';
+ if(!U||!T){bannerErr('_LINK THIẾU userId HOẶC token — không vào được. Vui lòng quay lại app đối tác và chạm icon quay thưởng.');$('spinBtn').disabled=true;return}
+ const r=await api(`/v1/users/${encodeURIComponent(U)}?probe=1`);
+ await refresh();
+ if(turns<=0) bannerErr('Bạn đang có 0 lượt quay. Quay lại app đối tác, hoàn thành nhiệm vụ (đặt xe / gửi tiết kiệm / thanh toán) để nhận thêm lượt.');
+}
+async function refresh(){
+ if(!U||!T){setTurns(0);return}
+ const r=await api(`/entry?userId=${encodeURIComponent(U)}&token=${encodeURIComponent(T)}`);
+ if(!r.j.valid){bannerErr('Token không hợp lệ ('+(r.j.error||'401')+'). Vui lòng lấy link mới từ app đối tác.');setTurns(0);return}
+ setTurns(r.j.availableTurns);
+ $('giftCount').textContent=(r.j.gifts||[]).length;
+ bannerOk('Đã kết nối · '+U+' · còn '+r.j.availableTurns+' lượt');
+}
+async function doSpin(){
+ if(busy||turns<=0)return;
+ busy=true;$('spinBtn').disabled=true;
+ $('wheel').classList.add('spinning');
+ $('hint').textContent='Đang quay…';
+ const r=await api('/v1/spin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:U,token:T})});
+ if(r.status!==200){
+  busy=false;$('wheel').classList.remove('spinning');setTurns(turns);
+  bannerErr(r.j.error==='no turns left'?'Hết lượt quay. Quay lại app đối tác để nhận thêm.':'Không quay được: '+(r.j.error||r.status));
+  $('hint').textContent='Ấn “Quay ngay”.';return;
+ }
+ r.j.remaining!==undefined&&setTurns(r.j.remaining);
+ const w=$('wheel');w.style.transform=`rotate(${1440+Math.floor(Math.random()*360)}deg)`;
+ setTimeout(()=>{busy=false;$('wheel').classList.remove('spinning');setTurns(r.j.remaining||turns);refresh();
+   $('modalPrize').textContent=r.j.gift.label;$('modalCode').textContent=r.j.gift.code;
+   $('modalMeta').textContent='spinId '+r.j.spinId+' · HSĐ '+r.j.gift.expiresAt.slice(0,10)+' · quà đã ghi vào '+U;
+   $('overlay').classList.add('show');},4000);
+}
+function closeModal(){$('overlay').classList.remove('show');$('hint').textContent='Quà đã lưu. Còn '+turns+' lượt — quay thêm nếu muốn.'}
+window.doSpin=doSpin;window.doRefresh=refresh;window.closeModal=closeModal;
+boot();
+})();
+</script>
+</body>
+</html>

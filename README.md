@@ -177,13 +177,17 @@ moneyhunter/
 │   ├── auth.js          # JWT HS256 sign/verify
 │   ├── books.js         # store users/turns/gifts (in-memory)
 │   └── router.js        # tất cả route /v1/* + /entry + static demo
-├── public/index.html    # trang demo vận hành (3 cột)
+├── public/
+│   ├── wheel.html       # màn quay thực tế — GET /entry?userId=&token= (browser) trả file này
+│   └── index.html       # trang demo vận hành (3 cột) — chỉ cho dev
 ├── test/run.js          # 12 tests end-to-end (fetch, không cần test framework)
 ├── docs/
 │   ├── API.md           # chi tiết request/response
-│   └── DEPLOY.md        # hướng dẫn deploy Lightsail + tunnel
+│   ├── DEPLOY.md        # hướng dẫn deploy Lightsail + tunnel
+│   └── TEAM-ROADMAP.md  # phân việc expert / fresh + sprint plan
 ├── ecosystem.config.js  # PM2
 └── package.json         # zero deps
 ```
 
 *Xem [`docs/API.md`](docs/API.md) để xem schema đầy đủ và [`docs/DEPLOY.md`](docs/DEPLOY.md) để deploy từ đầu.*
+*Xem [`docs/TEAM-ROADMAP.md`](docs/TEAM-ROADMAP.md) để chia việc cho team.*
