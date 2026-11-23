@@ -1,0 +1,23 @@
+{
+  "name": "moneyhunter",
+  "version": "2.0.0",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/run.js"
+  },
+  "description": "Wheel Provider — Money Hunter (third-party prize wheel): trigger +turns per userId, token-gated entry, spin deducts and grants prizes.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anhluufromVietnam/moneyhunter.git"
+  },
+  "homepage": "https://github.com/anhluufromVietnam/moneyhunter#readme",
+  "keywords": [
+    "wheel",
+    "gamification",
+    "money-hunter",
+    "provider",
+    "api"
+  ]
+}

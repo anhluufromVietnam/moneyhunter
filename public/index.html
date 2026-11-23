@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Wheel Provider — Demo vận hành</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Nunito',sans-serif;background:#0f172a;min-height:100vh}
+.top{background:#111827;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+.badge{background:#facc15;color:#111;font-weight:900;padding:6px 12px;border-radius:999px;font-size:12px}
+.layout{max-width:1300px;margin:16px auto;padding:0 16px;display:grid;grid-template-columns:340px 1fr 340px;gap:16px;align-items:start}
+.panel{background:#fff;border-radius:16px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+.panel h3{font-size:13px;text-transform:uppercase;color:#111827;margin-bottom:10px}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;word-break:break-all;line-height:1.7}
+.log{background:#0f172a;color:#a7f3d0;font-family:monospace;font-size:11px;border-radius:10px;padding:10px;max-height:300px;overflow:auto;line-height:1.7}
+input,select,textarea{width:100%;padding:10px;border:1.5px solid #d1d5db;border-radius:10px;font-family:inherit;font-size:13px}
+label{font-size:11px;font-weight:900;color:#374151;display:block;margin:8px 0 4px}
+.btn{width:100%;padding:12px;border:none;border-radius:12px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:8px}
+.btn-d{background:#111827;color:#fff}.btn-g{background:#16a34a;color:#fff}.btn-y{background:#facc15;color:#111}
+.phone{width:390px;height:780px;background:#fff;border-radius:40px;box-shadow:0 20px 60px rgba(0,0,0,.4),0 0 0 8px #111,0 0 0 10px #333;overflow:hidden;position:relative;display:flex;flex-direction:column;margin:0 auto}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;background:#e0f2fe}
+.screen.active{display:flex}
+.notch{height:32px;display:flex;justify-content:space-between;padding:0 18px;align-items:center;font-size:12px;font-weight:700;background:#fff}
+.nav{background:#fff;padding:10px 16px;font-weight:900;font-size:18px;border-bottom:1px solid #eee}
+.hero{flex:1;padding:14px;display:flex;flex-direction:column;background:linear-gradient(180deg,#7dd3fc,#86efac)}
+.wheel{width:250px;height:250px;margin:8px auto;border-radius:50%;border:10px solid #facc15;background:conic-gradient(#16a34a 0 60deg,#fef08a 60deg 120deg,#16a34a 120deg 180deg,#fef08a 180deg 240deg,#16a34a 240deg 300deg,#fef08a 300deg 360deg);transition:transform 3.5s cubic-bezier(.12,.8,.08,1)}
+.white{background:#fff;border-radius:16px;padding:14px}
+.code{background:#fef9c3;padding:10px;border-radius:10px;text-align:center;font-weight:900;font-size:20px}
+.gift{border:1px solid #e5e7eb;border-radius:12px;padding:10px;margin-top:8px;background:#fff}
+.toast{position:absolute;left:50%;bottom:80px;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 14px;border-radius:999px;font-weight:800;font-size:13px;z-index:9;display:none;white-space:nowrap}
+@media(max-width:1100px){.layout{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="top"><div><b>🎡 Wheel Provider — Demo vận hành</b><p style="font-size:12px;opacity:.7">Trigger +lượt → vào app bằng userId+token → quay trừ lượt + ghi quà</p></div><span class="badge">LIVE API</span></div>
+<div class="layout">
+
+<div style="display:flex;flex-direction:column;gap:16px">
+<div class="panel">
+<h3>🔗 1) Bên đối tác — Trigger +1 lượt</h3>
+<label>userId</label><input id="tUser" value="USR_001">
+<label>amount</label><input id="tAmt" type="number" value="1">
+<label>source</label><input id="tSrc" value="mygreen-button">
+<button class="btn btn-g" onclick="doTrigger()">POST /v1/trigger (X-Api-Key)</button>
+<div class="mono" id="triggerOut" style="margin-top:8px">—</div>
+</div>
+<div class="panel">
+<h3>🔐 2) Vào app (yêu cầu userId + token)</h3>
+<label>token (JWT)</label><textarea id="tokenOut" rows="3"></textarea>
+<button class="btn btn-d" onclick="doEntry()">GET /entry?userId=&token=</button>
+<div class="mono" id="entryOut" style="margin-top:8px">—</div>
+</div>
+<div class="panel">
+<h3>⚡ 3) Quay (trừ lượt + ghi quà)</h3>
+<button class="btn btn-d" onclick="doSpin()">POST /v1/spin</button>
+<div class="mono" id="spinOut" style="margin-top:8px">—</div>
+</div>
+</div>
+
+<div>
+<div class="phone"><div class="toast" id="toast"></div>
+<div class="screen active" data-screen="gate"><div class="notch"><span>9:41</span><span>📶🔋</span></div><div class="nav">Money Hunter</div>
+<div class="hero" style="justify-content:center;align-items:center;text-align:center">
+<div style="font-size:60px">🔒</div><b>Yêu cầu userId + token</b>
+<p style="font-size:13px;margin:10px 0">Mở vòng quay bằng link từ app đối tác.<br>Thiếu 1 trong 2 → không vào được.</p>
+<div class="mono" style="text-align:left">/demo?userId=USR_001&token=&lt;JWT&gt;<br>/entry?userId=USR_001&token=&lt;JWT&gt;</div>
+<button class="btn btn-d" style="max-width:260px;margin-top:14px" onclick="doEntry();go('wheel')">Vào vòng quay</button>
+</div></div>
+
+<div class="screen" data-screen="wheel"><div class="notch"><span>9:41</span><span>📶🔋</span></div><div class="nav">‹ Money Hunter</div>
+<div class="hero">
+<div class="white" style="text-align:center;font-weight:900">Còn <span id="turns">0</span> lượt • <span id="uidLabel2">USR_001</span></div>
+<div class="wheel" id="wheel"></div>
+<button class="btn btn-g" onclick="doSpin();">Quay ngay</button>
+<button class="btn btn-d" onclick="go('gifts')">🎁 Quà của tôi</button>
+</div></div>
+
+<div class="screen" data-screen="result"><div class="notch"><span>9:41</span><span>📶🔋</span></div><div class="nav">‹ Kết quả</div>
+<div class="hero" style="justify-content:center"><div class="white" style="text-align:center">
+<div style="font-size:40px">🎉</div><b id="prizeLabel">—</b><div class="code" id="prizeCode">—</div>
+<p style="font-size:11px;color:#666" id="spinMeta"></p>
+<button class="btn btn-g" onclick="go('wheel')">Quay lại</button>
+<button class="btn btn-d" onclick="go('gifts')">Quà của tôi</button>
+</div></div></div>
+
+<div class="screen" data-screen="gifts"><div class="notch"><span>9:41</span><span>📶🔋</span></div><div class="nav">‹ Quà của tôi</div>
+<div class="hero" id="giftsBox"><p style="font-size:13px">Chưa có quà. Quay để nhận.</p></div></div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:16px">
+<div class="panel"><h3>🗂️ Quản lý theo userId (admin)</h3>
+<label>userId</label><input id="mUser" value="USR_001">
+<button class="btn btn-d" onclick="doGetUser()">GET /v1/users/:userId</button>
+<button class="btn btn-y" onclick="doAdjust()">PATCH turns (+1)</button>
+<button class="btn btn-d" onclick="doList()">GET /v1/users (list)</button>
+<div class="mono" id="mgmtOut" style="margin-top:8px">—</div>
+</div>
+<div class="panel"><h3>🧪 Test API nhanh</h3>
+<button class="btn btn-g" onclick="runAllTests()">Chạy test toàn trình</button>
+<div class="log" id="log" style="margin-top:8px">— Test log —</div>
+</div>
+<div class="panel"><h3>📐 Kiến trúc</h3>
+<div class="mono">Partner button → POST /trigger +lượt<br>→ App link ?userId+token → /entry gate<br>→ POST /spin -1 + quà vào userId<br>→ Admin quản lý theo userId</div>
+</div>
+</div>
+</div>
+
+<script>
+let TOKEN='', USER='USR_001', TURNS=0;
+const $=id=>document.getElementById(id);
+const hdrs=()=>({'Content-Type':'application/json','Authorization':'Bearer '+TOKEN});
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
+function log(m){$('log').innerHTML=m+'<br>'+$('log').innerHTML}
+function go(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.dataset.screen===id))}
+async function api(path,opt){const r=await fetch(path,opt);const j=await r.json();return{status:r.status,j}}
+async function boot(){
+ const r=await fetch('/v1/auth/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).catch(()=>null);
+ // get token from server demo: use entry with placeholder then fetch real token via /token-demo (not in prod)
+ const t=await fetch('/token-demo').then(x=>x.json()).catch(()=>({token:''}));
+ TOKEN=t.token||''; $('tokenOut').value=TOKEN; log('boot token ready');
+}
+async function doTrigger(){
+ USER=$('tUser').value.trim()||'USR_001';
+ const r=await api('/v1/trigger',{method:'POST',headers:{'Content-Type':'application/json','X-Client-Id':'mygreen','X-Api-Key':'mygreen_api_key_test'},body:JSON.stringify({userId:USER,amount:+$('tAmt').value||1,source:$('tSrc').value})});
+ $('triggerOut').textContent=JSON.stringify(r.j,null,2); log(`POST /v1/trigger → ${r.status} ${JSON.stringify(r.j)}`);
+ if(r.j.availableTurns!==undefined){TURNS=r.j.availableTurns;$('turns').textContent=TURNS;$('uidLabel2').textContent=USER}
+ toast('Đã +'+(r.j.added||0)+' lượt cho '+USER);
+}
+async function doEntry(){
+ USER=$('tUser').value.trim()||'USR_001'; TOKEN=$('tokenOut').value.trim();
+ const r=await api(`/entry?userId=${encodeURIComponent(USER)}&token=${encodeURIComponent(TOKEN)}`);
+ $('entryOut').textContent=JSON.stringify(r.j,null,2); log(`GET /entry → ${r.status} turns=${r.j.availableTurns}`);
+ if(r.j.valid){TURNS=r.j.availableTurns;$('turns').textContent=TURNS;$('uidLabel2').textContent=USER; go('wheel'); toast('Vào được vòng quay');}
+ else toast('Bị chặn: '+r.j.error);
+}
+async function doSpin(){
+ USER=$('tUser').value.trim()||'USR_001'; TOKEN=$('tokenOut').value.trim();
+ const r=await api('/v1/spin',{method:'POST',headers:hdrs(),body:JSON.stringify({userId:USER,token:TOKEN})});
+ $('spinOut').textContent=JSON.stringify(r.j,null,2); log(`POST /v1/spin → ${r.status} ${JSON.stringify(r.j).slice(0,160)}`);
+ if(r.j.gift){
+  document.getElementById('wheel').style.transform=`rotate(${1440+Math.floor(Math.random()*360)}deg)`;
+  TURNS=r.j.remaining; $('turns').textContent=TURNS;
+  setTimeout(()=>{$('prizeLabel').textContent=r.j.gift.label;$('prizeCode').textContent=r.j.gift.code;$('spinMeta').textContent=`spinId:${r.j.spinId} userId:${USER} còn ${TURNS} lượt`;go('result');toast('🎉 Trúng quà!');renderGifts();},1200);
+ } else toast(r.j.error||'lỗi');
+}
+async function doGetUser(){
+ const uid=$('mUser').value.trim();
+ const r=await api(`/v1/users/${encodeURIComponent(uid)}`,{headers:hdrs()});
+ $('mgmtOut').textContent=JSON.stringify(r.j,null,2);
+}
+async function doAdjust(){
+ const uid=$('mUser').value.trim();
+ const r=await api(`/v1/users/${encodeURIComponent(uid)}/turns`,{method:'PATCH',headers:hdrs(),body:JSON.stringify({delta:1})});
+ $('mgmtOut').textContent=JSON.stringify(r.j,null,2);
+}
+async function doList(){
+ const r=await api('/v1/users',{headers:hdrs()});
+ $('mgmtOut').textContent=JSON.stringify(r.j,null,2);
+}
+function renderGifts(){const g=$('giftsBox');g.innerHTML='<b style="background:#fff;padding:8px;border-radius:10px;display:inline-block">🎁 Quà đã trúng (theo userId)</b>';g.insertAdjacentHTML('beforeend','<div class="gift"><b>Xem chi tiết qua API quản lý</b><br><small>GET /v1/users/'+USER+'</small></div>');}
+async function runAllTests(){
+ log('— Test toàn trình start —');
+ await doTrigger();
+ await doEntry();
+ await doSpin();
+ await doGetUser();
+ log('— Test toàn trình done —');
+}
+window.doTrigger=doTrigger;window.doEntry=doEntry;window.doSpin=doSpin;window.doGetUser=doGetUser;window.doAdjust=doAdjust;window.doList=doList;window.runAllTests=runAllTests;window.go=go;
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+node_modules/
+*.log
+.DS_Store
+.env
+.env.*
+*.pem
+*.key
+credentials*.json
+ecosystem.local.js
+# in-memory demo state (if persisted later)
+data/
+dump.rdb
+Thumbs.db
+.idea/
+.vscode/
